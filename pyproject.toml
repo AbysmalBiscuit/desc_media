@@ -1,0 +1,75 @@
+[project]
+name = "desc-media"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "av>=14.3.0",
+    "click>=8.1.8",
+    "coloredlogs>=15.0.1",
+    "filetype>=1.2.0",
+    "httpx>=0.28.1",
+    "mypy>=1.15.0",
+    "ollama>=0.4.8",
+    "pillow>=11.2.1",
+    "ruff>=0.11.7",
+    "tqdm>=4.67.1",
+]
+
+[project.scripts]
+descmedia = "desc_media.cli:main"
+
+[tool.uv]
+dev-dependencies = []
+package = true
+compile-bytecode = true
+
+[tool.uv.sources]
+src = { path = "src" }
+# pygments-abc = { path = "extra/pygments-abc" }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/survey_data_downloader"]
+
+[tool.ruff]
+extend = "ruff.toml"
+
+[tool.basedpyright]
+reportUnusedCallResult = false
+reportInvalidCast = false
+reportUnknownVariableType = false
+reportUnknownMemberType = false
+reportMissingTypeStubs = false
+reportRedeclaration = false
+
+[tool.mypy]
+# disallow_any_decorated = false
+# disallow_any_generics = false
+# disallow_any_unimported = false
+# disallow_subclassing_any = false
+# disallow_untyped_calls = false
+# disallow_untyped_defs = false
+# ignore_missing_imports = true
+warn_unused_ignores = true
+# warn_return_any = false
+check_untyped_defs = true
+cache_dir = ".mypy_cache"
+
+plugins = ["numpy.typing.mypy_plugin"]
+
+
+[[tool.mypy.overrides]]
+module = [
+    "coloredlogs",
+    "num2words",
+    "pypandoc",
+    "scipy",
+    "scipy.*",
+    "sklearn",
+    "sklearn.*",
+    "statsmodels",
+    "statsmodels.*",
+    "cmasher",
+]
+ignore_missing_imports = true
