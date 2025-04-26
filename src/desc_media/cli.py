@@ -12,6 +12,7 @@ from filetype import is_image, is_video
 from tqdm import tqdm
 
 from desc_media.process import process_image, process_video
+from desc_media.utils import find_files, find_files_fd
 
 __version__ = "0.0.1"
 
@@ -97,9 +98,9 @@ def describe(
             )
             logger.info("%s: %s", str(path), [item[0] for item in desc.most_common()])
     else:
-        files = list(path.rglob("*"))
-        image_files = [file for file in files if is_image(file)]
-        video_files = [file for file in files if is_video(file)]
+        files: list[Path] = [file for file in path.rglob("*") if file.is_file()]
+        image_files: list[Path] = [file for file in files if is_image(file)]
+        video_files: list[Path] = [file for file in files if is_video(file)]
         if len(files) == 0:
             logger.info("No files found in: '%s'", path)
             return
@@ -139,24 +140,39 @@ def describe(
     default=5,
     help="Batch size for video processing.",
 )
+@click.option(
+    "incremental",
+    "--incremental",
+    "-i",
+    is_flag=True,
+    default=False,
+    help="Skip files already in descfile",
+)
 @click.argument(
     "path",
     type=click.Path(exists=True, path_type=Path),
 )
 @click.argument(
-    "output_path",
+    "descfile",
     type=click.Path(path_type=Path),
 )
 def save(
     *,
     extra_prompt: str,
     video_batch_size: int,
+    incremental: bool,
     path: Path,
-    output_path: Path,
+    descfile: Path,
 ) -> None:
     """Describe the given image, video, or all images/videos in a folder."""
     client: ollama.Client = ollama.Client(host="http://127.0.0.1:11434", timeout=5)
+    if descfile == Path(".") or descfile.is_dir():
+        descfile = descfile / "descmedia.json"
     descriptions: dict[str, list[tuple[str, int]]] = {}
+
+    if incremental:
+        descriptions = json.loads(descfile.read_text())
+
     if path.is_file():
         if is_image(path):
             desc = process_image(
@@ -176,16 +192,24 @@ def save(
             logger.debug("%s: %s", str(path), [item[0] for item in desc.most_common()])
             descriptions[str(path.resolve())] = desc.most_common()
     else:
-        files = list(path.rglob("*"))
-        image_files = [file for file in files if is_image(file)]
-        video_files = [file for file in files if is_video(file)]
-        if len(files) == 0:
+        # files: list[Path] = find_files(path)
+        # logger.debug("Found %s files", len(files))
+        image_files: list[Path] = find_files_fd(path, filter_type="image")
+        video_files: list[Path] = find_files_fd(path, filter_type="video")
+        if len(image_files) == 0 and len(video_files) == 0:
             logger.debug("No files found in: '%s'", path)
             return
-        logger.debug("Found %s files", len(files))
         logger.debug("Found %s image files", len(image_files))
         logger.debug("Found %s video files", len(video_files))
-        for image in tqdm(image_files, desc="Images", leave=False):
+
+        for idx, image in tqdm(
+            enumerate(image_files),
+            desc="Images",
+            total=len(image_files),
+            leave=False,
+        ):
+            if incremental and str(image.resolve()) in descriptions:
+                continue
             desc = process_image(
                 client=client,
                 path=image,
@@ -193,7 +217,16 @@ def save(
             )
             logger.debug("%s: %s", str(image), [item[0] for item in desc.most_common()])
             descriptions[str(image.resolve())] = desc.most_common()
-        for video in tqdm(video_files, desc="Videos", leave=False):
+            if idx % 50 == 0:
+                descfile.write_text(json.dumps(descriptions, indent=4, sort_keys=False))
+        for idx, video in tqdm(
+            enumerate(video_files),
+            desc="Videos",
+            total=len(video_files),
+            leave=False,
+        ):
+            if incremental and str(video.resolve()) in descriptions:
+                continue
             desc = process_video(
                 client=client,
                 path=video,
@@ -202,11 +235,10 @@ def save(
             )
             logger.debug("%s: %s", str(video), [item[0] for item in desc.most_common()])
             descriptions[str(video.resolve())] = desc.most_common()
+            if idx % 50 == 0:
+                descfile.write_text(json.dumps(descriptions, indent=4, sort_keys=False))
 
-    # Saving descriptions if necessary
-    if output_path == Path(".") or output_path.is_dir():
-        output_path = output_path / "descmedia.json"
-    output_path.write_text(json.dumps(descriptions, indent=4, sort_keys=False))
+    descfile.write_text(json.dumps(descriptions, indent=4, sort_keys=False))
 
 
 def main() -> int:

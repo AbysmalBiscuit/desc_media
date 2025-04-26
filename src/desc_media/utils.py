@@ -1,15 +1,19 @@
 from __future__ import annotations
 
 import logging
+import shutil
+import subprocess
 import traceback
 from pathlib import Path
+from typing import Literal
 
 import av
 import filetype
 from PIL import Image
+from tqdm import tqdm
 
-IMG_EXT = {".jpeg", ".jpg", ".png", ".gif", ".webp", ".tiff", ".web"}
-VIDEO_EXT = {".mp4", ".mov"}
+IMAGE_EXT = (".jpeg", ".jpg", ".png", ".gif", ".webp", ".tiff", ".web")
+VIDEO_EXT = (".mp4", ".mov", ".mkv", ".avi")
 
 TRANSLATION_DICT = {
     "\n": " ",
@@ -63,6 +67,14 @@ def is_image(path: Path) -> bool:
         return True
 
 
+def is_video_fast(path: Path) -> bool:
+    return path.stem in VIDEO_EXT
+
+
+def is_image_fast(path: Path) -> bool:
+    return path.stem in IMAGE_EXT
+
+
 def post_process_model_result(result: str) -> list[str]:
     result = result.translate(TRANSLATION_TABLE)
     if "," in result:
@@ -70,3 +82,55 @@ def post_process_model_result(result: str) -> list[str]:
     else:
         result_list = [s.strip() for s in result.split(" ")]
     return result_list
+
+
+def find_files_fd(path: Path, filter_type: Literal["image", "video"] | None = None) -> list[Path]:
+    fd = shutil.which("fd") or shutil.which("fdfind") or shutil.which("fd-find")
+    if fd is None:
+        msg = "fd is not ava.lable on this system."
+        raise ValueError(msg)
+
+    logger.info("Using fd to search for files.")
+    filter_ = "."
+    if filter_type == "image":
+        filter_ = r".(" + "|".join(["\\" + ext for ext in IMAGE_EXT]) + ")$"
+    elif filter_type == "video":
+        filter_ = r".(" + "|".join(["\\" + ext for ext in VIDEO_EXT]) + ")$"
+
+    result = subprocess.run(
+        [
+            fd,
+            "-t",
+            "f",
+            f"{filter_}",
+            str(path.resolve()),
+        ],
+        check=True,
+        stdout=subprocess.PIPE,
+    )
+    return [Path(f) for f in result.stdout.decode().splitlines()]
+
+
+def find_files(path: Path, filter_type: Literal["image", "video"] | None = None) -> list[Path]:
+    fd = shutil.which("fd") or shutil.which("fdfind") or shutil.which("fd-find")
+    if fd is not None:
+        logger.info("Using fd to search for files.")
+        if filter_type == "image":
+            filter_ = "(" + "|".join(IMAGE_EXT) + ")$"
+        elif filter_type == "video":
+            filter_ = "(" + "|".join(VIDEO_EXT) + ")$"
+
+        result = subprocess.run(
+            [
+                fd,
+                "-t",
+                "f",
+                ".",
+                str(path.resolve()),
+            ],
+            check=True,
+            stdout=subprocess.PIPE,
+        )
+        return [Path(f) for f in result.stdout.decode().splitlines()]
+    logger.info("Using Python to search for files.")
+    return [f for f in tqdm(path.rglob("*"), desc="Finding files") if f.is_file()]
