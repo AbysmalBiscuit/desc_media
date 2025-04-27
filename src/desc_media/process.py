@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 import httpx
 import ollama
+from PIL import Image
 from tqdm import tqdm
 
 from desc_media.ffmpeg import extract_keyframes
@@ -43,6 +44,7 @@ def process_video(
     extra_prompt: str = "",
     max_retries: int = 5,
 ) -> Counter[str]:
+    """Generate keywords to describe a video."""
     if extra_prompt:
         extra_prompt = f"\n{extra_prompt}"
 
@@ -97,8 +99,19 @@ def process_image(
     path: Path,
     extra_prompt: str = "",
 ) -> Counter[str]:
+    """Generate keywords to describe an image."""
     if extra_prompt:
         extra_prompt = f"\n{extra_prompt}"
+
+    created_temp: bool = False
+    temp_path: Path = path
+    if path.stem.casefold() not in (".jpeg", ".jpg", ".png"):
+        created_temp = True
+        temp_path = path.parent / f"{path.name}_temp.jpg"
+        im = Image.open(str(path))
+        im = im.convert("RGB")
+        im.save(str(temp_path))
+
     response = _describe(
         client=client,
         messages=[
@@ -110,10 +123,13 @@ Do not format the output as a numbered list.
 Do not format the output as a list.
 Do not include punctuation other than commas.
 Only output the keywords, separated by commas.""",
-                "images": [str(path.resolve())],
+                "images": [str(temp_path.resolve())],
             },
         ],
     )
+    if created_temp:
+        temp_path.unlink()
+
     if response is None:
         logger.error("Failed to analyze the video: '%s'", str(path))
         return Counter([])

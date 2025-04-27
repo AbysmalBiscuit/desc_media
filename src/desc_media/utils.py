@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from collections import Counter
+from collections.abc import Hashable
+import json
 import logging
 import shutil
 import subprocess
@@ -134,3 +137,11 @@ def find_files(path: Path, filter_type: Literal["image", "video"] | None = None)
         return [Path(f) for f in result.stdout.decode().splitlines()]
     logger.info("Using Python to search for files.")
     return [f for f in tqdm(path.rglob("*"), desc="Finding files") if f.is_file()]
+
+
+def get_counter_most_common_keys[T: Hashable](desc: Counter[T]) -> list[T]:
+    return [item[0] for item in desc.most_common()]
+
+
+def save_descriptions(path: Path, descriptions: dict[str, list[str]]) -> None:
+    path.write_text(json.dumps(descriptions, indent=2, sort_keys=False))
