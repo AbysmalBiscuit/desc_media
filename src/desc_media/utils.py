@@ -81,9 +81,9 @@ def is_image_fast(path: Path) -> bool:
 def post_process_model_result(result: str) -> list[str]:
     result = result.translate(TRANSLATION_TABLE)
     if "," in result:
-        result_list = [s.strip() for s in result.split(",")]
+        result_list = [s.strip().lower() for s in result.split(",")]
     else:
-        result_list = [s.strip() for s in result.split(" ")]
+        result_list = [s.strip().lower() for s in result.split(" ")]
     return result_list
 
 
@@ -103,6 +103,8 @@ def find_files_fd(path: Path, filter_type: Literal["image", "video"] | None = No
     result = subprocess.run(
         [
             fd,
+            "--unrestricted",
+            "--absolute-path",
             "-t",
             "f",
             f"{filter_}",

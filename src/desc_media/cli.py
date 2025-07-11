@@ -4,7 +4,7 @@ import json
 import logging
 import sys
 from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 import click
 import coloredlogs
@@ -21,6 +21,9 @@ from desc_media.utils import (
     get_counter_most_common_keys,
     save_descriptions,
 )
+
+if TYPE_CHECKING:
+    from collections import Counter
 
 __version__ = "0.0.1"
 
@@ -200,9 +203,15 @@ def save(
 
     descriptions: dict[str, list[str]] = {}
 
+    num_images_failed_to_describe = 0
+    num_videos_failed_to_describe = 0
+    num_images_described = 0
+    num_videos_described = 0
+
     if incremental:
         descriptions = cast(dict[str, list[str]], json.loads(descfile.read_text()))
 
+    desc: Counter[str]
     if path.is_file():
         if is_image(path):
             desc = process_image(
@@ -213,6 +222,10 @@ def save(
 
             logger.debug("%s: %s", str(path), [item[0] for item in desc.most_common()])
             descriptions[str(path.resolve())] = get_counter_most_common_keys(desc)
+            if len(desc) > 0:
+                num_images_described += 1
+            else:
+                num_images_failed_to_describe += 1
         elif is_video(path):
             desc = process_video(
                 client=client,
@@ -222,6 +235,10 @@ def save(
             )
             logger.debug("%s: %s", str(path), [item[0] for item in desc.most_common()])
             descriptions[str(path.resolve())] = get_counter_most_common_keys(desc)
+            if len(desc) > 0:
+                num_videos_described += 1
+            else:
+                num_videos_failed_to_describe += 1
     else:
         # files: list[Path] = find_files(path)
         # logger.debug("Found %s files", len(files))
@@ -230,8 +247,24 @@ def save(
         if len(image_files) == 0 and len(video_files) == 0:
             logger.warning("No media files found in: '%s'", path)
             return
-        logger.debug("Found %s image files", len(image_files))
-        logger.debug("Found %s video files", len(video_files))
+        logger.info("Found total %s image files", len(image_files))
+        logger.info("Found total %s video files", len(video_files))
+
+        if incremental:
+            image_files = [
+                f
+                for f in tqdm(image_files, desc="Checking images")
+                if (file_path := str(f)) not in descriptions or len(descriptions[file_path]) == 0
+            ]
+            video_files = [
+                f
+                for f in tqdm(video_files, desc="Checking videos")
+                if (file_path := str(f)) not in descriptions or len(descriptions[file_path]) == 0
+            ]
+            logger.info("Need to describe %s image files", len(image_files))
+            logger.info("Need to describe %s video files", len(video_files))
+            logger.debug("Images to describe: %s", image_files)
+            logger.debug("Videos to describe: %s", video_files)
 
         for idx, image in tqdm(
             enumerate(image_files),
@@ -239,13 +272,6 @@ def save(
             total=len(image_files),
             leave=False,
         ):
-            if (
-                incremental
-                and (file_path := str(image.resolve())) in descriptions
-                and len(descriptions[file_path]) > 0
-            ):
-                logger.verbose("Skipping %s", file_path)
-                continue
             desc = process_image(
                 client=client,
                 path=image,
@@ -253,7 +279,12 @@ def save(
             )
             most_common = get_counter_most_common_keys(desc)
             logger.debug("%s: %s", str(image), most_common)
-            descriptions[str(image.resolve())] = most_common
+            descriptions[str(image)] = most_common
+            if len(desc) > 0:
+                num_images_described += 1
+            else:
+                num_images_failed_to_describe += 1
+
             if idx % 50 == 0:
                 save_descriptions(descfile, descriptions)
         for idx, video in tqdm(
@@ -262,8 +293,6 @@ def save(
             total=len(video_files),
             leave=False,
         ):
-            if incremental and str(video.resolve()) in descriptions:
-                continue
             desc = process_video(
                 client=client,
                 path=video,
@@ -272,10 +301,26 @@ def save(
             )
             most_common = get_counter_most_common_keys(desc)
             logger.debug("%s: %s", str(video), most_common)
-            descriptions[str(video.resolve())] = most_common
+            descriptions[str(video)] = most_common
+
+            if len(desc) > 0:
+                num_videos_described += 1
+            else:
+                num_videos_failed_to_describe += 1
+
             if idx % 50 == 0:
                 save_descriptions(descfile, descriptions)
 
+    logger.info(
+        "Described: %s images and %s videos",
+        num_images_described,
+        num_videos_described,
+    )
+    logger.info(
+        "Failed: %s images and %s videos",
+        num_images_failed_to_describe,
+        num_videos_failed_to_describe,
+    )
     save_descriptions(path=descfile, descriptions=descriptions)
 
 
