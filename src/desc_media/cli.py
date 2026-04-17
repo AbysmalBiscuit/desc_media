@@ -17,7 +17,6 @@ from desc_media import ROOT_LOGGER
 from desc_media.process import process_image, process_video
 from desc_media.utils import (
     find_files,
-    find_files_fd,
     get_counter_most_common_keys,
     save_descriptions,
 )
@@ -25,7 +24,7 @@ from desc_media.utils import (
 if TYPE_CHECKING:
     from collections import Counter
 
-__version__ = "0.0.1"
+__version__ = "0.0.2"
 
 
 logger = verboselogs.VerboseLogger(__name__)
@@ -284,10 +283,9 @@ def save(
             else:
                 num_videos_failed_to_describe += 1
     else:
-        # files: list[Path] = find_files(path)
         # logger.debug("Found %s files", len(files))
-        image_files: list[Path] = find_files_fd(path, filter_type="image")
-        video_files: list[Path] = find_files_fd(path, filter_type="video")
+        image_files: list[Path] = find_files(path, filter_type="image")
+        video_files: list[Path] = find_files(path, filter_type="video")
         if len(image_files) == 0 and len(video_files) == 0:
             logger.warning("No media files found in: '%s'", path)
             return
