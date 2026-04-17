@@ -5,7 +5,6 @@ import logging
 import shutil
 import subprocess
 import traceback
-from collections.abc import Hashable
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
@@ -16,6 +15,7 @@ from tqdm import tqdm
 
 if TYPE_CHECKING:
     from collections import Counter
+    from collections.abc import Hashable
 
 IMAGE_EXT = (".jpeg", ".jpg", ".png", ".gif", ".webp", ".tiff", ".web")
 VIDEO_EXT = (".mp4", ".mov", ".mkv", ".avi")
@@ -128,7 +128,7 @@ def find_files(path: Path, filter_type: Literal["image", "video"] | None = None)
     """Finds files using `fd`. If `fd` is not available, falls back to using Python."""
     fd = shutil.which("fd") or shutil.which("fdfind") or shutil.which("fd-find")
     if fd is not None:
-        return find_files_fd(path, filter_type)
+        return find_files_fd(fd, path, filter_type)
 
     logger.info("Using Python to search for files.")
 
