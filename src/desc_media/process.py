@@ -73,7 +73,8 @@ def process_video(
                     "content": f"""\
 Analyze the following images and output a list of 10-50 keywords or hashtags that best describe the
 visual content.
-The images are part of a video, so they should flow_together.{extra_prompt}
+The images are part of a video, so they should flow_together.
+{extra_prompt}
 Do not format the output as a numbered list.
 Do not format the output as a list.
 Do not include punctuation other than commas.
@@ -118,7 +119,8 @@ def process_image(
             {
                 "role": "user",
                 "content": f"""\
-Analyze this image and output a list of 10-50 keywords or hashtags that best describe the visual content.{extra_prompt}
+Analyze this image and output a list of 10-50 keywords or hashtags that best describe the visual content.
+{extra_prompt}
 Do not format the output as a numbered list.
 Do not format the output as a list.
 Do not include punctuation other than commas.
@@ -131,7 +133,7 @@ Only output the keywords, separated by commas.""",
         temp_path.unlink()
 
     if response is None:
-        logger.error("Failed to analyze the video: '%s'", str(path))
+        logger.error("Failed to analyze the image: '%s'", str(path))
         return Counter([])
 
     result = response["message"]["content"]

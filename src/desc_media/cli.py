@@ -115,6 +115,7 @@ def cli(
     "path",
     type=click.Path(exists=True, path_type=Path),
 )
+@click.pass_context
 def describe(
     ctx,
     *,
@@ -211,6 +212,7 @@ def describe(
     "descfile",
     type=click.Path(path_type=Path),
 )
+@click.pass_context
 def save(
     ctx,
     *,
@@ -249,7 +251,7 @@ def save(
     num_images_described = 0
     num_videos_described = 0
 
-    if incremental:
+    if incremental and descfile.is_file():
         descriptions = cast(dict[str, list[str]], json.loads(descfile.read_text()))
 
     desc: Counter[str]
