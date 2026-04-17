@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import logging
 import shutil
+import tempfile
 from collections import Counter
-from typing import TYPE_CHECKING
+from pathlib import Path
 
 import httpx
 import ollama
@@ -12,9 +13,6 @@ from tqdm import tqdm
 
 from desc_media.ffmpeg import extract_keyframes
 from desc_media.utils import post_process_model_result
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +46,7 @@ def process_video(
     if extra_prompt:
         extra_prompt = f"\n{extra_prompt}"
 
-    frames_dir = path.parent / "_temp_frames"
+    frames_dir = Path(tempfile.mkdtemp(prefix="desc_media_"))
     frames_dir.mkdir(parents=True, exist_ok=True)
 
     extract_keyframes(path=path, out_dir=frames_dir)
@@ -65,7 +63,7 @@ def process_video(
             selected = frames[start - 2 : start + batch_size]
         else:
             selected = frames[start : start + batch_size]
-        response = _describe(
+        response: ollama.ChatResponse | None = _describe(
             client=client,
             messages=[
                 {
@@ -73,7 +71,7 @@ def process_video(
                     "content": f"""\
 Analyze the following images and output a list of 10-50 keywords or hashtags that best describe the
 visual content.
-The images are part of a video, so they should flow_together.
+The images are part of a video, so they should flow together.
 {extra_prompt}
 Do not format the output as a numbered list.
 Do not format the output as a list.
@@ -88,7 +86,9 @@ Only output the keywords, separated by commas.""",
             logger.error("Failed to analyze part of the video: '%s'", selected)
             continue
         logger.debug(
-            f"Description for batch {start // batch_size + 1}: {response['message']['content']}"
+            "Description for batch %d: %s",
+            start // batch_size + 1,
+            response["message"]["content"],
         )
         responses.append(response["message"]["content"])
     shutil.rmtree(frames_dir)
@@ -106,14 +106,16 @@ def process_image(
 
     created_temp: bool = False
     temp_path: Path = path
-    if path.stem.casefold() not in (".jpeg", ".jpg", ".png"):
+    suffix: str = path.suffix.casefold()
+    if suffix not in (".jpeg", ".jpg", ".png"):
         created_temp = True
-        temp_path = path.parent / f"{path.name}_temp.jpg"
+        temp_result = tempfile.mkstemp(prefix="desc_media_", suffix=suffix)
+        temp_path = Path(temp_result[1])
         im = Image.open(str(path))
         im = im.convert("RGB")
         im.save(str(temp_path))
 
-    response = _describe(
+    response: ollama.ChatResponse | None = _describe(
         client=client,
         messages=[
             {
@@ -137,5 +139,5 @@ Only output the keywords, separated by commas.""",
         return Counter([])
 
     result = response["message"]["content"]
-    logger.debug(f"Description for image {path!s}: {result}")
+    logger.debug("Description for image %s: %s", str(path), result)
     return Counter(post_process_model_result(result))
