@@ -1,4 +1,6 @@
-from __future__ import annotations
+"""A Python CLI tool that uses a local LLAMA model to describe media."""
+
+__version__ = "0.0.2"
 
 import logging
 

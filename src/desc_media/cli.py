@@ -13,7 +13,7 @@ import verboselogs
 from filetype import is_image, is_video
 from tqdm import tqdm
 
-from desc_media import ROOT_LOGGER
+from desc_media import ROOT_LOGGER, __version__
 from desc_media.process import process_image, process_video
 from desc_media.utils import (
     find_files,
@@ -23,8 +23,6 @@ from desc_media.utils import (
 
 if TYPE_CHECKING:
     from collections import Counter
-
-__version__ = "0.0.2"
 
 
 logger = verboselogs.VerboseLogger(__name__)
