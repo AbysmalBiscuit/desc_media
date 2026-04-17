@@ -44,9 +44,36 @@ logger = verboselogs.VerboseLogger(__name__)
     count=True,
     help="Decrease verbosity (can be used additively)",
 )
+@click.option(
+    "--address",
+    "-a",
+    default="127.0.0.1",
+    type=str,
+    help="IP address of Ollama. Defaults to local Ollama address.",
+)
+@click.option(
+    "--port",
+    "-p",
+    default=11434,
+    type=int,
+    help="Port to use for connecting to Ollama. Defaults to local Ollama port.",
+)
+@click.option(
+    "--protocol",
+    "-r",
+    default="http",
+    type=click.Choice(["http", "https"]),
+)
 @click.version_option(version=__version__, prog_name="")
 @click.pass_context
-def cli(ctx: click.Context, verbose: int, quiet: int) -> None:
+def cli(
+    ctx: click.Context,
+    verbose: int,
+    quiet: int,
+    address: str,
+    port: int,
+    protocol: str,
+) -> None:
     """
     \bDescribe video and image files.
     """  # noqa: D200, D415, D212, D205, D301
@@ -66,6 +93,9 @@ def cli(ctx: click.Context, verbose: int, quiet: int) -> None:
         8: logging.NOTSET,
     }
     coloredlogs.set_level(verbosity_levels.get(verbosity, logging.NOTSET))
+
+    ctx.ensure_object(dict)
+    ctx.obj["host"] = f"{protocol}://{address}:{port}"
 
 
 @cli.command("describe")
@@ -89,13 +119,19 @@ def cli(ctx: click.Context, verbose: int, quiet: int) -> None:
     type=click.Path(exists=True, path_type=Path),
 )
 def describe(
+    ctx,
     *,
     extra_prompt: str,
     video_batch_size: int,
     path: Path,
 ) -> None:
-    """Describe the given image, video, or all images/videos in a folder."""
-    client: ollama.Client = ollama.Client(host="http://127.0.0.1:11434", timeout=5)
+    """Describe an image/video, or all images/videos in a folder.
+
+    Processes each file through a local LLaVA model and logs the resulting
+    keywords. Results are not persisted; use the ``save`` subcommand to write
+    output to disk.
+    """
+    client: ollama.Client = ollama.Client(host=ctx.obj["host"], timeout=5)
     if path.is_file():
         if is_image(path):
             desc = process_image(
@@ -179,6 +215,7 @@ def describe(
     type=click.Path(path_type=Path),
 )
 def save(
+    ctx,
     *,
     extra_prompt: str,
     video_batch_size: int,
@@ -187,8 +224,15 @@ def save(
     path: Path,
     descfile: Path,
 ) -> None:
-    """Describe the given image, video, or all images/videos in a folder."""
-    client: ollama.Client = ollama.Client(host="http://127.0.0.1:11434", timeout=timeout)
+    """Describe media and persist the results to a JSON file.
+
+    Extends the ``describe`` subcommand by writing keyword results to
+    ``descfile`` as a JSON mapping of absolute file paths to keyword lists.
+    When processing directories, progress is checkpointed to disk every 50
+    files so partial results are preserved on failure. A structured log file
+    (``descmedia.log``) is written alongside ``descfile``.
+    """
+    client: ollama.Client = ollama.Client(host=ctx.obj["host"], timeout=timeout)
     if descfile == Path(".") or descfile.is_dir():
         descfile = descfile / "descmedia.json"
 
